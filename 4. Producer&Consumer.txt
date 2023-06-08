@@ -1,0 +1,88 @@
+#include <pthread.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <semaphore.h>
+#include <unistd.h>
+sem_t mutex, full, empty;
+int *buffer, front = 0, rear = 0, count = 1;
+int sizeOfBuffer;
+int stopProducing = 0;
+int stopConsuming = 0;
+void *producer(void *p);
+void *consumer(void *p);
+int main(int argc, char *argv[]) {
+ int choice;
+ int gProduce = 3;
+ int gConsume = 3;
+ int i;
+ printf("Enter Size of Buffer:\n");
+ scanf("%d", &sizeOfBuffer);
+ buffer = (int *)malloc(sizeOfBuffer * sizeof(int));
+ sem_init(&mutex, 0, 1);
+ sem_init(&full, 0, 0);
+ sem_init(&empty, 0, sizeOfBuffer);
+ pthread_t tid_p[gProduce];
+ pthread_t tid_c[gConsume];
+ while (1) {
+ for (i = 0; i < gProduce; i++) {
+ pthread_create(&tid_p[i], NULL, producer, (void *)(intptr_t)i);
+ }
+ for (i = 0; i < gConsume; i++) {
+ pthread_create(&tid_c[i], NULL, consumer, (void *)(intptr_t)i);
+ }
+ printf("\nDo you want to continue? (1/0):\n");
+ scanf("%d", &choice);
+ if (choice == 0)
+ break;
+ }
+ stopProducing = 1;
+ stopConsuming = 1;
+ for (i = 0; i < gProduce; i++) {
+ pthread_join(tid_p[i], NULL);
+ }
+ for (i = 0; i < gConsume; i++) {
+ pthread_join(tid_c[i], NULL);
+ }
+ free(buffer);
+ sem_destroy(&mutex);
+ sem_destroy(&full);
+ sem_destroy(&empty);
+ return 0;
+}
+void *producer(void *p) {
+ int t = (int)(intptr_t)p;
+ while (!stopProducing) {
+ sem_wait(&empty);
+ sem_wait(&mutex);
+ buffer[rear] = count;
+ printf("\nProducer %d produced element: %d\n", t, buffer[rear]);
+ rear = (rear + 1) % sizeOfBuffer;
+ count++;
+ sem_post(&mutex);
+ sem_post(&full);
+ printf("\n**********************\n");
+ for (int i = 0; i < sizeOfBuffer; i++)
+ printf("\t%d", buffer[i]);
+ printf("\n**********************\n");
+ sleep(1);
+ }
+ pthread_exit(0);
+}
+void *consumer(void *p) {
+ int t = (int)(intptr_t)p;
+ while (!stopConsuming) {
+ sem_wait(&full);
+ sem_wait(&mutex);
+ printf("\nConsumer %d consumed element: %d\n", t, buffer[front]);
+ buffer[front] = 0;
+ front = (front + 1) % sizeOfBuffer;
+ sem_post(&mutex);
+ sem_post(&empty);
+ printf("\n**********************\n");
+ for (int i = 0; i < sizeOfBuffer; i++)
+ printf("\t%d", buffer[i]);
+ printf("\n**********************\n");
+ sleep(1);
+ }
+ pthread_exit(0);
+}
